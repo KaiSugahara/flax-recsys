@@ -1,0 +1,43 @@
+{
+    "name": "flax-trainer-dev",
+    "build": {
+        "context": "..",
+        "dockerfile": "Dockerfile"
+    },
+    "workspaceFolder": "/workspace",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+    "mounts": [
+        "source=${localEnv:HOME}/.ssh,target=/home/user/.ssh,type=bind,consistency=cached"
+    ],
+    "remoteUser": "user",
+    "updateRemoteUserUID": true,
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "charliermarsh.ruff",
+                "ms-toolsai.jupyter",
+                "njpwerner.autodocstring"
+            ],
+            "settings": {
+                "python.analysis.typeCheckingMode": "basic",
+                "python.analysis.autoImportCompletions": true,
+                "python.analysis.extraPaths": [
+                    "/workspace"
+                ],
+                "notebook.formatOnSave.enabled": true,
+                "notebook.codeActionsOnSave": {
+                    "notebook.source.fixAll": "explicit",
+                    "notebook.source.organizeImports": "explicit"
+                },
+                "[python]": {
+                    "editor.formatOnSave": true,
+                    "editor.codeActionsOnSave": {
+                        "source.fixAll": "explicit",
+                        "source.organizeImports": "explicit"
+                    },
+                    "editor.defaultFormatter": "charliermarsh.ruff"
+                }
+            }
+        }
+    }
+}
