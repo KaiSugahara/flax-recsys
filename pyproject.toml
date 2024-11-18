@@ -8,7 +8,14 @@ license="Apache-2.0"
 
 [tool.poetry.dependencies]
 python = "^3.12"
+flax-trainer = {git = "https://github.com/KaiSugahara/flax-trainer", rev = "dev-1.1.1"}
+pandas = "^2.2.3"
+polars = "^1.9.0"
+scikit-learn = "^1.5.2"
 
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.5"
 
 [build-system]
 requires = ["poetry-core"]
