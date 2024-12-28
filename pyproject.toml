@@ -1,14 +1,14 @@
 [tool.poetry]
 name = "flax-recsys"
-version = "1.0.0"
+version = "1.1.0"
 description = ""
 authors = ["Kai Sugahara <contact@kais.jp>"]
 readme = "README.md"
 license="Apache-2.0"
 
 [tool.poetry.dependencies]
-python = "^3.12"
-flax-trainer = {git = "https://github.com/KaiSugahara/flax-trainer", rev = "dev-1.1.1"}
+python = "^3.11"
+flax-trainer = {git = "https://github.com/KaiSugahara/flax-trainer", rev = "dev-1.1.2"}
 pandas = "^2.2.3"
 polars = "^1.9.0"
 scikit-learn = "^1.5.2"
