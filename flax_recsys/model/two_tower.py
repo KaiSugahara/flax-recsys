@@ -4,7 +4,7 @@ from flax import nnx
 
 
 class TwoTower(nnx.Module):
-    """Matrix Factorization"""
+    """Two Tower"""
 
     def __init__(
         self,
