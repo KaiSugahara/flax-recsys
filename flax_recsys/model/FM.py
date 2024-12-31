@@ -120,7 +120,10 @@ class FM(nnx.Module):
         )
 
     def __call__(self, X: jax.Array) -> jax.Array:
-        interaction_term = (
+        return self.interaction_term(X) + self.bias_term(X)
+
+    def interaction_term(self, X: jax.Array) -> jax.Array:
+        return (
             jnp.sum(
                 sum(
                     [
@@ -179,7 +182,9 @@ class FM(nnx.Module):
                 ]
             )
         ) / 2
-        bias_term = (
+
+    def bias_term(self, X: jax.Array) -> jax.Array:
+        return (
             sum(
                 [
                     self.user_lin_cat_embedders[i](X[:, index])
@@ -200,5 +205,3 @@ class FM(nnx.Module):
             )
             + self.bias.embedding[0]
         )
-
-        return interaction_term + bias_term
