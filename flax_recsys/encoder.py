@@ -3,26 +3,46 @@ from typing import Self
 import jax
 import jax.numpy as jnp
 import polars as pl
+from chex import dataclass
+
+
+@dataclass
+class ColumnSetting:
+    user_id: None | str
+    item_id: None | str
+    rating: None | str
+    timestamp: None | str
+    one_hot: list[str]
+    multi_hot: list[str]
+    numerical: list[str]
 
 
 class ColumnEncoder:
-    encoding_map: dict[str, dict] = {}
-    cardinality_map: dict[str, int] = {}
-    field_sizes: list[int] = []
-
     def __init__(
         self,
-        column_setting: dict,
+        *,
+        user_id: None | str = None,
+        item_id: None | str = None,
+        rating: None | str = None,
+        timestamp: None | str = None,
+        one_hot: list[str] = [],
+        multi_hot: list[str] = [],
+        numerical: list[str] = [],
     ):
-        self.column_setting = {
-            "user_id": None,
-            "item_id": None,
-            "rating": None,
-            "timestamp": None,
-            "one_hot": [],
-            "multi_hot": [],
-            "numeric": [],
-        } | column_setting.copy()
+        # Set column setting
+        self.column_setting = ColumnSetting(
+            user_id=user_id,
+            item_id=item_id,
+            rating=rating,
+            timestamp=timestamp,
+            one_hot=one_hot,
+            multi_hot=multi_hot,
+            numerical=numerical,
+        )
+
+        # Initialize
+        self.encoding_map: dict[str, dict] = {}
+        self.cardinality_map: dict[str, int] = {}
 
     def fit(
         self,
@@ -31,17 +51,9 @@ class ColumnEncoder:
         # Re-Initialize
         self.encoding_map = {}
         self.cardinality_map = {}
-        self.field_sizes = []
 
-        # Build encoding_map & cardinality_map & field_sizes
-        for column_name in (
-            [
-                self.column_setting["user_id"],
-                self.column_setting["item_id"],
-            ]
-            + self.column_setting["one_hot"]
-            + self.column_setting["multi_hot"]
-        ):
+        # Build encoding_map & cardinality_map for categorical columns
+        for column_name in self.categorical_columns:
             self.encoding_map[column_name] = dict(
                 zip(
                     (
@@ -54,74 +66,86 @@ class ColumnEncoder:
                 )
             )
             self.cardinality_map[column_name] = len(self.encoding_map[column_name]) + 1
-            self.field_sizes += [len(self.encoding_map[column_name]) + 1]
 
-        for column_name in self.column_setting["numeric"]:
-            self.field_sizes += [1]
+        # Build encoding_map & cardinality_map for multihot columns
+        for column_name in self.column_setting.multi_hot:
+            raise NotImplementedError()
 
         return self
 
-    def transform(self, dataset_df: pl.DataFrame) -> tuple[jax.Array, jax.Array]:
-        arr = []
-
-        # One-hot Type Column
-        for column_name in [
-            self.column_setting["user_id"],
-            self.column_setting["item_id"],
-        ] + self.column_setting["one_hot"]:
-            arr.append(
-                jax.nn.one_hot(
-                    dataset_df.get_column(column_name)
-                    .replace_strict(self.encoding_map[column_name], default=0)
-                    .to_numpy(),
-                    self.cardinality_map[column_name],
-                )
+    def transform(
+        self, dataset_df: pl.DataFrame
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        # One-hot Type Column Matrix
+        categorical_X_df = dataset_df.select(
+            pl.col(column_name).replace_strict(
+                self.encoding_map[column_name], default=0
             )
+            for column_name in self.categorical_columns
+        )
+        categorical_X = (
+            jax.device_put(categorical_X_df.to_numpy())
+            if categorical_X_df.shape[1] > 0
+            else jnp.empty((dataset_df.height, 0))
+        )
 
-        # Multi-hot Type Column
-        for column_name in self.column_setting["multi_hot"]:
-            arr.append(
-                jnp.vstack(
-                    [
-                        jax.nn.one_hot(
-                            row.to_numpy(), self.cardinality_map[column_name]
-                        ).sum(axis=0)
-                        for row in dataset_df.get_column(column_name).list.eval(
-                            pl.element().replace_strict(
-                                self.encoding_map[column_name], default=0
-                            )
-                        )
-                    ]
-                )
-            )
+        # Multi-hot Type Column (Not yet implemented)
+        if len(self.column_setting.multi_hot) > 0:
+            raise NotImplementedError()
 
         # Numeric Type Column
-        if len(self.column_setting["numeric"]) > 0:
-            arr.append(
-                jax.device_put(
-                    dataset_df.select(self.column_setting["numeric"]).to_numpy()
-                )
-            )
+        numerical_X_df = dataset_df.select(self.numerical_columns).cast(pl.Float32)
+        numerical_X = (
+            jax.device_put(numerical_X_df.to_numpy())
+            if numerical_X_df.shape[1] > 0
+            else jnp.empty((dataset_df.height, 0))
+        )
 
-        return jnp.hstack(arr), jax.device_put(dataset_df.select("rating").to_numpy())
+        # Target Column Matrix
+        y_df = dataset_df.select(self.target_columns).cast(pl.Float32)
+        y = (
+            jax.device_put(y_df.to_numpy())
+            if y_df.shape[1] > 0
+            else jnp.empty((dataset_df.height, 0))
+        )
+
+        return categorical_X, numerical_X, y
+
+    def fit_transform(self, dataset_df: pl.DataFrame):
+        return self.fit(dataset_df=dataset_df).transform(dataset_df=dataset_df)
 
     @property
-    def dimension(self) -> int:
-        dim = 0
+    def categorical_columns(self) -> list[str]:
+        return (
+            (
+                [self.column_setting.user_id]
+                if self.column_setting.user_id is not None
+                else []
+            )
+            + (
+                [self.column_setting.item_id]
+                if self.column_setting.item_id is not None
+                else []
+            )
+            + self.column_setting.one_hot
+        )
 
-        # One-hot Type Column
-        for column_name in [
-            self.column_setting["user_id"],
-            self.column_setting["item_id"],
-        ] + self.column_setting["one_hot"]:
-            dim += self.cardinality_map[column_name]
+    @property
+    def numerical_columns(self) -> list[str]:
+        return self.column_setting.numerical
 
-        # Multi-hot Type Column
-        for column_name in self.column_setting["multi_hot"]:
-            dim += self.cardinality_map[column_name]
+    @property
+    def target_columns(self) -> list[str]:
+        return (
+            [self.column_setting.rating]
+            if self.column_setting.rating is not None
+            else []
+        )
 
-        # Numeric Type Column
-        for column_name in self.column_setting["numeric"]:
-            dim += 1
+    @property
+    def categorical_column_num(self) -> int:
+        return len(self.categorical_columns)
 
-        return dim
+    @property
+    def numerical_column_num(self) -> int:
+        return len(self.numerical_columns)
