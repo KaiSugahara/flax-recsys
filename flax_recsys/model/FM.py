@@ -4,31 +4,95 @@ from flax import nnx
 
 
 class FM(nnx.Module):
-    """Factorization Machines"""
+    """FM"""
 
-    def __init__(self, data_dim: int, embed_dim: int, rngs: nnx.Rngs):
-        """Initialize model layer and parameters
-
-        Args:
-            data_dim (int): number of dataset dimensions.
-            embed_dim (int): number of feature dimensions.
-            rngs (nnx.Rngs): rng key.
-        """
-
-        self.data_dim = data_dim
-        self.embedder = nnx.Embed(
-            num_embeddings=data_dim, features=embed_dim, rngs=rngs
+    def __init__(
+        self,
+        categorical_feature_cardinalities: list[int],
+        numerical_feature_num: int,
+        embed_dim: int,
+        rngs: nnx.Rngs,
+    ):
+        (
+            self.categorical_feature_cardinalities,
+            self.numerical_feature_num,
+        ) = (
+            categorical_feature_cardinalities,
+            numerical_feature_num,
         )
-        self.linear = nnx.Linear(in_features=data_dim, out_features=1, rngs=rngs)
 
-    def __call__(self, X: jax.Array) -> jax.Array:
-        # Linear Term
-        linear_term_X = self.linear(X)
+        # Coefficient b for Linear Term
+        self.b = {
+            "categorical": {
+                field_i: nnx.Embed(num_embeddings=car, features=1, rngs=rngs)
+                for field_i, car in enumerate(categorical_feature_cardinalities)
+            },
+            "numerical": {
+                field_i: nnx.Embed(num_embeddings=1, features=1, rngs=rngs)
+                for field_i in range(numerical_feature_num)
+            },
+        }
 
-        # Interaction Term
-        V = self.embedder.embedding.value
-        interaction_term_X = (
-            jnp.sum((X.dot(V)) ** 2 - (X**2).dot(V**2), axis=1) / 2
-        ).reshape(-1, 1)
+        # Embedding Matrix W for Interaction Term
+        self.W = {
+            "categorical": {
+                field_i: nnx.Embed(num_embeddings=car, features=embed_dim, rngs=rngs)
+                for field_i, car in enumerate(categorical_feature_cardinalities)
+            },
+            "numerical": {
+                field_i: nnx.Embed(num_embeddings=1, features=embed_dim, rngs=rngs)
+                for field_i in range(numerical_feature_num)
+            },
+        }
 
-        return linear_term_X + interaction_term_X
+        # Bias b0
+        self.b0 = nnx.Param(jax.random.normal(rngs.params(), (1,), jnp.float32))
+
+    def __call__(self, *Xs: jax.Array) -> jax.Array:
+        categorical_X, numerical_X = Xs
+        return jax.vmap(
+            lambda categorical_X_row, numerical_X_row: (
+                self.bias_term_by_row(categorical_X_row, numerical_X_row)
+                + self.interaction_term_by_row(categorical_X_row, numerical_X_row)
+            ),
+            in_axes=(0),
+            out_axes=(0),
+        )(categorical_X, numerical_X).reshape(-1, 1)
+
+    def interaction_term_by_row(
+        self, categorical_X_row: jax.Array, numerical_X_row: jax.Array
+    ) -> jax.Array:
+        V = self.generate_V_by_row(categorical_X_row, numerical_X_row)
+        return (
+            (jnp.linalg.norm(V.sum(axis=0)) ** 2)
+            - (jnp.linalg.norm(V, axis=1) ** 2).sum()
+        ) / 2
+
+    def bias_term_by_row(
+        self, categorical_X_row: jax.Array, numerical_X_row: jax.Array
+    ) -> jax.Array:
+        return jnp.vstack(
+            [
+                self.b["categorical"][i](value)
+                for i, value in enumerate(categorical_X_row)
+            ]
+            + [
+                self.b["numerical"][i].embedding[0] * value
+                for i, value in enumerate(numerical_X_row)
+            ]
+            + [self.b0.value]
+        ).sum()
+
+    def generate_V_by_row(
+        self, categorical_X_row: jax.Array, numerical_X_row: jax.Array
+    ) -> jax.Array:
+        return jnp.vstack(
+            [
+                self.W["categorical"][i](value)
+                for i, value in enumerate(categorical_X_row)
+            ]
+            + [
+                self.W["numerical"][i].embedding[0] * value
+                for i, value in enumerate(numerical_X_row)
+            ]
+        )
