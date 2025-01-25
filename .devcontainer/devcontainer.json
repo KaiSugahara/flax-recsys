@@ -6,10 +6,6 @@
     },
     "workspaceFolder": "/workspace",
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
-    "mounts": [
-        "source=${localEnv:HOME}/.ssh,target=/home/user/.ssh,type=bind,consistency=cached"
-    ],
-    "remoteUser": "user",
     "updateRemoteUserUID": true,
     "customizations": {
         "vscode": {
@@ -36,7 +32,8 @@
                         "source.organizeImports": "explicit"
                     },
                     "editor.defaultFormatter": "charliermarsh.ruff"
-                }
+                },
+                "files.insertFinalNewline": true
             }
         }
     }
