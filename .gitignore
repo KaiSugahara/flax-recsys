@@ -5,3 +5,6 @@ poetry.lock
 dataset
 
 *.pickle
+
+mlruns
+mlartifacts
