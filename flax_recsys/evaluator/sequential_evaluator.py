@@ -3,7 +3,7 @@ from typing import Generic, TypeVar
 import jax.numpy as jnp
 from flax import nnx
 from flax_trainer.evaluator import BaseEvaluator
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from flax_recsys.encoder.sequential_encoder import SequentialEncoder
 from flax_recsys.loader.sequential_loader import SequentialLoader
@@ -23,11 +23,13 @@ class SequentialEvaluator(BaseEvaluator, Generic[T, Model]):
         self.sequences = encoder.transform(sequences)
         self.encoder = encoder
 
-        self.loader = SequentialLoader(
-            sequences=sequences,
-            encoder=encoder,
-            batch_size=batch_size,
-            rngs=nnx.Rngs(0),
+        self.batches = list(
+            SequentialLoader(
+                sequences=sequences,
+                encoder=encoder,
+                batch_size=batch_size,
+                rngs=nnx.Rngs(0),
+            )
         )
 
     def evaluate(self, model: Model) -> tuple[float, dict[str, float]]:
@@ -36,7 +38,7 @@ class SequentialEvaluator(BaseEvaluator, Generic[T, Model]):
         # Cross entropy
         ce = float(
             jnp.stack(
-                [calc_cross_entropy_loss(model, Xs, y) for Xs, y in tqdm(self.loader)]
+                [calc_cross_entropy_loss(model, Xs, y) for Xs, y in tqdm(self.batches)]
             ).mean()
         )
 
