@@ -1,1 +1,2 @@
 from .general_rating_loader import GeneralRatingLoader as GeneralRatingLoader
+from .sequential_loader import SequentialLoader as SequentialLoader
