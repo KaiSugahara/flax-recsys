@@ -11,6 +11,6 @@ def cross_entropy_loss(
 
     # Cross Entropy
     logits = pred[jnp.arange(pred.shape[0]), y.reshape(-1)]
-    loss = -jnp.mean(jnp.log(logits))
+    loss = -jnp.mean(jnp.log(logits + 1e-10))
 
     return loss
