@@ -1,4 +1,3 @@
-import itertools
 import random
 from typing import Generic, Self, TypeVar
 
@@ -6,6 +5,7 @@ import jax
 import numpy as np
 from flax import nnx
 from flax_trainer.loader import BaseLoader
+from tqdm.auto import tqdm
 
 from flax_recsys.encoder.sequential_encoder import SequentialEncoder
 
@@ -98,26 +98,16 @@ class SequentialLoader(BaseLoader, Generic[T]):
         output_X = [[] for _ in range(self.batch_size)]
         mask_X = [[] for _ in range(self.batch_size)]
         nondummy_X = [[] for _ in range(self.batch_size)]
+        num_by_row = [0 for _ in range(self.batch_size)]
 
         # Split
-        for i in range(self.batch_size):
-            tmp_sequences = sequences[i :: self.batch_size]
-            input_X[i] = list(
-                itertools.chain.from_iterable([seq[:-1] for seq in tmp_sequences])
-            )
-            output_X[i] = list(
-                itertools.chain.from_iterable([seq[1:] for seq in tmp_sequences])
-            )
-            mask_X[i] = list(
-                itertools.chain.from_iterable(
-                    [[0.0] + [1.0] * (len(seq) - 2) for seq in tmp_sequences]
-                )
-            )
-            nondummy_X[i] = list(
-                itertools.chain.from_iterable(
-                    [[1] * (len(seq) - 1) for seq in tmp_sequences]
-                )
-            )
+        for seq in tqdm(sequences, leave=False, desc="[MAKE DATASET]"):
+            i = np.argmin(num_by_row).tolist()
+            input_X[i] += seq[:-1]
+            output_X[i] += seq[1:]
+            mask_X[i] += [0.0] + [1.0] * (len(seq) - 2)
+            nondummy_X[i] += [1] * (len(seq) - 1)
+            num_by_row[i] += len(seq) - 1
 
         # Fill dummy values
         batch_num = max(map(len, input_X))
